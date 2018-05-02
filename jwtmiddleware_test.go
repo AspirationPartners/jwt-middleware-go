@@ -3,25 +3,21 @@ package jwtmiddleware
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/codegangsta/negroni"
-	"github.com/dgrijalva/jwt-go"
-	"github.com/gorilla/context"
-	"github.com/gorilla/mux"
-	. "github.com/smartystreets/goconvey/convey"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/codegangsta/negroni"
+	"github.com/dgrijalva/jwt-go"
+	"github.com/gorilla/mux"
+	. "github.com/smartystreets/goconvey/convey"
 )
 
 // defaultAuthorizationHeaderName is the default header name where the Auth
 // token should be written
 const defaultAuthorizationHeaderName = "Authorization"
-
-// envVarClientSecretName the environment variable to read the JWT environment
-// variable
-const envVarClientSecretName = "CLIENT_SECRET_VAR_SHHH"
 
 // userPropertyName is the property name that will be set in the request context
 const userPropertyName = "custom-user-property"
@@ -56,7 +52,7 @@ func TestAuthenticatedRequest(t *testing.T) {
 			w := makeAuthenticatedRequest("GET", "/", map[string]interface{}{"foo": "bar"}, nil)
 			So(w.Code, ShouldEqual, http.StatusOK)
 		})
-		Convey("Authenticated GET to /protected path should return a 200 reponse if expected algorithm is not specified", func() {
+		Convey("Authenticated GET to /protected path should return a 200 response if expected algorithm is not specified", func() {
 			var expectedAlgorithm jwt.SigningMethod
 			expectedAlgorithm = nil
 			w := makeAuthenticatedRequest("GET", "/protected", map[string]interface{}{"foo": "bar"}, expectedAlgorithm)
@@ -104,7 +100,11 @@ func makeAuthenticatedRequest(method string, url string, c map[string]interface{
 	r, _ := http.NewRequest(method, url, nil)
 	if c != nil {
 		token := jwt.New(jwt.SigningMethodHS256)
-		token.Claims = c
+		mc := jwt.MapClaims{}
+		for k, v := range c {
+			mc[k] = v
+		}
+		token.Claims = mc
 		// private key generated with http://kjur.github.io/jsjws/tool_jwt.html
 		s, e := token.SignedString(privateKey)
 		if e != nil {
@@ -197,9 +197,10 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 // in the token as json -> {"text":"bar"}
 func protectedHandler(w http.ResponseWriter, r *http.Request) {
 	// retrieve the token from the context (Gorilla context lib)
-	u := context.Get(r, userPropertyName)
+	u := r.Context().Value(userPropertyName)
 	user := u.(*jwt.Token)
-	respondJson(user.Claims["foo"].(string), w)
+	mc := *user.Claims.(*jwt.MapClaims)
+	respondJson(mc["foo"].(string), w)
 }
 
 // Response quick n' dirty Response struct to be encoded as json

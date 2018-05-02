@@ -45,11 +45,14 @@ type Options struct {
 	// When set, all requests with the OPTIONS method will use authentication
 	// Default: false
 	EnableAuthOnOptions bool
-	// When set, the middelware verifies that tokens are signed with the specific signing algorithm
+	// When set, the middleware verifies that tokens are signed with the specific signing algorithm
 	// If the signing method is not constant the ValidationKeyGetter callback can be used to implement additional checks
 	// Important to avoid security issues described here: https://auth0.com/blog/2015/03/31/critical-vulnerabilities-in-json-web-token-libraries/
 	// Default: nil
 	SigningMethod jwt.SigningMethod
+	// A function that initiates a custom claim object for the parser
+	// Default: MapClaims{}
+	ClaimsFactory func() jwt.Claims
 }
 
 type JWTMiddleware struct {
@@ -80,6 +83,10 @@ func New(options ...Options) *JWTMiddleware {
 
 	if opts.Extractor == nil {
 		opts.Extractor = FromAuthHeader
+	}
+
+	if opts.ClaimsFactory == nil {
+		opts.ClaimsFactory = func() jwt.Claims { return &jwt.MapClaims{} }
 	}
 
 	return &JWTMiddleware{
@@ -200,7 +207,7 @@ func (m *JWTMiddleware) CheckJWT(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	// Now parse the token
-	parsedToken, err := jwt.Parse(token, m.Options.ValidationKeyGetter)
+	parsedToken, err := jwt.ParseWithClaims(token, m.Options.ClaimsFactory(), m.Options.ValidationKeyGetter)
 
 	// Check if there was an error in parsing...
 	if err != nil {
